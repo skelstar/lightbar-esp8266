@@ -29,18 +29,18 @@ void fadeall()
   }
 }
 
-void initialiseLeds()
+void initialiseLeds(uint32_t colour)
 {
   FastLED.addLeds<WS2812B, PIXEL_PIN, GRB>(strip, NUM_PIXELS);
   FastLED.setBrightness(50);
-  allLedsOn(COLOUR_WHITE);
+  allLedsOn(colour);
   FastLED.show();
 }
 
 void drawBatteryPercent(uint8_t percent)
 {
   uint8_t map = NUM_PIXELS * ((percent*1.0)/100);
-  Serial.printf("pc: %d map: %d\n", percent, map);
+  // Serial.printf("pc: %d map: %d\n", percent, map);
   for (uint8_t i = 0; i < NUM_PIXELS; i++) {
     if (i <= map) {
       strip[i] = COLOUR_GREEN;

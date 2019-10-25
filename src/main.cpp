@@ -9,14 +9,16 @@
 enum EventsEnum
 {
   POWERED_UP,
-  MOVING,
-  STOPPED_MOVING
+  EV_MOVING,
+  EV_STOPPED_MOVING,
+  EV_VESC_OFFLINE
 } event;
 
 //-------------------------------
 State state_poweredup(
   [] { Serial.printf("state_poweredup \n"); },
   [] { 
+    int8_t pc = getBatteryPercentage(batteryVoltage);
     drawBatteryPercent(batteryVoltage);
   }, 
   NULL
@@ -34,8 +36,18 @@ State state_moving(
 State state_stopped(
   [] { Serial.printf("state_stopped \n"); },
   [] { 
-    drawBatteryPercent(batteryVoltage);
+    int8_t pc = getBatteryPercentage(batteryVoltage);
+    drawBatteryPercent(pc);
   }, 
+  NULL
+);
+
+State state_vesc_offline(
+  [] { 
+    Serial.printf("state_vesc_offline \n"); 
+    allLedsOn(COLOUR_RED);
+  },
+  NULL,
   NULL
 );
 
@@ -44,16 +56,21 @@ Fsm fsm(&state_poweredup);
 void addFsmTransitions() {
 
   uint8_t event = POWERED_UP;
-  // fsm.add_transition(&state_battery_voltage_screen, &state_server_disconnected, event, NULL);
 
-  event = MOVING;
+  event = EV_MOVING;
   fsm.add_transition(&state_poweredup, &state_moving, event, NULL);
   fsm.add_transition(&state_stopped, &state_moving, event, NULL);
-  
+  fsm.add_transition(&state_vesc_offline, &state_moving, event, NULL);
 
-  event = STOPPED_MOVING;
+  event = EV_STOPPED_MOVING;
   // when state connected is entered it will transition to new state after 3 seconds
   fsm.add_timed_transition(&state_moving, &state_stopped, 3000, NULL);
+  fsm.add_transition(&state_poweredup, &state_stopped, event, NULL);
+
+  event = EV_VESC_OFFLINE;
+  fsm.add_transition(&state_moving, &state_vesc_offline, event, NULL);
+  fsm.add_transition(&state_poweredup, &state_vesc_offline, event, NULL);
+  fsm.add_transition(&state_stopped, &state_vesc_offline, event, NULL);  
 }
 
 Scheduler runner;
@@ -70,21 +87,19 @@ Task t_GetVescValues(
       if (vescOnline == false)
       {
         Serial.printf("VESC offline\n");
+        fsm.trigger(EV_VESC_OFFLINE);
       }
       else
       {
-        Serial.printf("Batt: %.1f\n", batteryVoltage);
-        int8_t pc = getBatteryPercentage(batteryVoltage);
+        // Serial.printf("Batt: %.1f\n", batteryVoltage);
         if (moving) {
-          fsm.trigger(MOVING);
+          fsm.trigger(EV_MOVING);
         }
         else {
-          fsm.trigger(STOPPED_MOVING);
+          fsm.trigger(EV_STOPPED_MOVING);
         }
-        // drawBatteryPercent(pc);
-        fsm.run_machine();
       }
-      // fsm.run_machine();
+      fsm.run_machine();
     });
 
 
@@ -97,7 +112,7 @@ void setup() {
   
   vesc.init(VESC_UART_BAUDRATE);
 
-  initialiseLeds();
+  initialiseLeds(COLOUR_OFF);
   
   runner.startNow();
   runner.addTask(t_GetVescValues);
